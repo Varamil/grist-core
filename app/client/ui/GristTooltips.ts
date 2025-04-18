@@ -50,6 +50,7 @@ export type Tooltip =
   | 'viewAsBanner'
   | 'reassignTwoWayReference'
   | 'attachmentStorage'
+  | 'adminControls'
   ;
 
 export type TooltipContentFunc = (...domArgs: DomElementArg[]) => DomContents;
@@ -210,6 +211,27 @@ see or edit which parts of your document.')
     )),
     ...args,
   ),
+  adminControls: (...args: DomElementArg[]) => cssTooltipContent(
+    dom('div', t('Manage users and resources in a Grist installation.')),
+    dom('div', cssLink({href: commonUrls.helpAdminControls, target: "_blank"}, t('Learn more.'))),
+    ...args,
+  ),
+};
+
+type ErrorTooltip = 'summaryFormulas';
+
+export const ErrorTooltips: Record<ErrorTooltip, TooltipContentFunc> = {
+  summaryFormulas: () =>
+    cssTooltipContent(
+      dom("div", t("Summary tables can only contain formula columns.")),
+      dom(
+        "div",
+        cssLink(
+          {href: commonUrls.helpSummaryFormulas, target: "_blank"},
+          t("Learn more.")
+        )
+      ),
+    ),
 };
 
 export interface BehavioralPromptContent {

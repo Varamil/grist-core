@@ -1,6 +1,3 @@
-/**
- * Note that it assumes the presence of cssVars.cssRootVars on <body>.
- */
 import {makeT} from 'app/client/lib/localization';
 import * as commands from 'app/client/components/commands';
 import {watchElementForBlur} from 'app/client/lib/FocusLayer';
@@ -32,7 +29,7 @@ export interface PageSidePanel {
   panelWidth: Observable<number>;
   panelOpen: Observable<boolean>;
   hideOpener?: boolean;           // If true, don't show the opener handle.
-  header: DomElementArg;
+  header?: DomElementArg;
   content: DomElementArg;
 }
 
@@ -390,7 +387,6 @@ const cssPageContainer = styled(cssVBox, `
 
   @media ${mediaSmall} {
     & {
-      padding-bottom: ${bottomFooterHeightPx}px;
       min-width: 240px;
     }
     .interface-singlePage & {
@@ -401,6 +397,7 @@ const cssPageContainer = styled(cssVBox, `
 const cssContentMain = styled(cssHBox, `
   flex: 1 1 0px;
   overflow: hidden;
+  position: relative;
 `);
 export const cssLeftPane = styled(cssVBox, `
   position: relative;
@@ -439,7 +436,7 @@ export const cssLeftPane = styled(cssVBox, `
     display: none;
   }
   &-overlap {
-    position: fixed;
+    position: absolute;
     z-index: 10;
     top: 0;
     bottom: 0;
@@ -464,6 +461,11 @@ const cssMainPane = styled(cssVBox, `
   z-index: 1;
   &-left-overlap {
     margin-left: 48px;
+  }
+  @media ${mediaSmall} {
+    & {
+      padding-bottom: ${bottomFooterHeightPx}px;
+    }
   }
 `);
 const cssRightPane = styled(cssVBox, `

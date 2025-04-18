@@ -1325,7 +1325,8 @@
         "This limitation occurs when one column in a two-way reference has the Reference type.": "Diese Einschränkung tritt auf, wenn eine Spalte in einer zweiseitigen Referenz den Typ Referenz hat.",
         "Two-way references are not currently supported for Formula or Trigger Formula columns": "Zwei-Wege-Referenzen werden derzeit nicht für Formel- oder Trigger-Formelspalten unterstützt",
         "The preview below this header shows how the selected user will see this document": "Die Vorschau unter dieser Überschrift zeigt, wie der ausgewählte Benutzer dieses Dokument sehen wird",
-        "[Learn more.]({{link}})": "[Erfahren Sie mehr.]({{link}})"
+        "[Learn more.]({{link}})": "[Erfahren Sie mehr.]({{link}})",
+        "Summary tables can only contain formula columns.": "Übersichtstabellen können nur Formelspalten enthalten."
     },
     "DescriptionConfig": {
         "DESCRIPTION": "BESCHREIBUNG"
@@ -1550,7 +1551,7 @@
         "Link copied to clipboard": "Link in die Zwischenablage kopiert",
         "Share this form": "Dieses Formular teilen",
         "View": "Ansicht",
-        "## **Form Title**": "## **Formular Titel**",
+        "# **Form Title**": "# **Formular Titel**",
         "Your form description goes here.": "Hier wird Ihr Formular beschrieben."
     },
     "Editor": {
@@ -1706,7 +1707,7 @@
     "Section": {
         "Insert section above": "Abschnitt oben einfügen",
         "Insert section below": "Abschnitt unten einfügen",
-        "### **Header**": "### **Kopfzeile**",
+        "## **Header**": "## **Kopfzeile**",
         "Description": "Beschreibung"
     },
     "CreateTeamModal": {
@@ -2012,5 +2013,9 @@
         "I confirm that I understand these warnings and accept the risks": "Ich bestätige, dass ich diese Warnhinweise verstanden habe und die Risiken akzeptiere",
         "Have you **reviewed the code** at this URL?": "Haben Sie * den Code** bei dieser URL **überprüft**?",
         "If in doubt, do not install this widget, or ask an administrator of your organization to review it for safety.": "Wenn in Zweifel, installieren Sie dieses Widget nicht oder fragen Sie einen Administrator Ihrer Organisation, um es für Sicherheit zu überprüfen."
+    },
+    "AdminLeftPanel": {
+        "Users": "Benutzer",
+        "Learn more": "Mehr erfahren"
     }
 }

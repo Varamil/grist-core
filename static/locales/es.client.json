@@ -1315,7 +1315,8 @@
         "To allow multiple assignments, change the referenced column's type to Reference List.": "Para permitir asignaciones múltiples, cambie el tipo de la Columna referenciada a Lista de referencias.",
         "Two-way references are not currently supported for Formula or Trigger Formula columns": "Las referencias bidireccionales no son compatibles actualmente con las columnas de fórmula o fórmula de activación",
         "The preview below this header shows how the selected user will see this document": "La vista previa debajo de este encabezado muestra cómo verá este documento el usuario seleccionado",
-        "[Learn more.]({{link}})": "[Aprende más.]({{link}})"
+        "[Learn more.]({{link}})": "[Aprende más.]({{link}})",
+        "Summary tables can only contain formula columns.": "Mesas de resumen sólo pueden contener columnas de fórmula."
     },
     "DescriptionConfig": {
         "DESCRIPTION": "DESCRIPCIÓN"
@@ -1566,7 +1567,7 @@
         "Save your document to publish this form.": "Guarde el documento para publicar este formulario.",
         "Share this form": "Compartir este formulario",
         "View": "Ver",
-        "## **Form Title**": "## **Título del formulario**",
+        "# **Form Title**": "# **Título del formulario**",
         "Your form description goes here.": "La descripción de su formulario va aquí."
     },
     "WelcomeCoachingCall": {
@@ -1637,7 +1638,7 @@
     "Section": {
         "Insert section above": "Insertar la sección anterior",
         "Insert section below": "Insertar la sección siguiente",
-        "### **Header**": "### *Encabezado**",
+        "## **Header**": "## *Encabezado**",
         "Description": "Descripción"
     },
     "AdminPanel": {

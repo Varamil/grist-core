@@ -7,7 +7,7 @@ import {isXSmallScreenObs} from 'app/client/ui2018/cssVars';
 import {confirmModal} from 'app/client/ui2018/modals';
 import {toggleSwitch} from 'app/client/ui2018/toggleSwitch';
 import {CellValue} from 'app/plugin/GristData';
-import {Disposable, dom, DomContents, makeTestId, MutableObsArray, obsArray, Observable} from 'grainjs';
+import {Disposable, dom, DomContents, IAttrObj, makeTestId, MutableObsArray, obsArray, Observable} from 'grainjs';
 import {marked} from 'marked';
 import {IPopupOptions, PopupControl} from 'popweasel';
 
@@ -65,21 +65,28 @@ export interface FormRendererContext {
 
 /**
  * Returns a copy of `layoutSpec` with any leaf nodes that don't exist
- * in `fieldIds` removed.
+ * in `fieldIds` removed. Optionally if the fieldIds is a map of old to new
+ * field ids, the leaf nodes will be updated to the new field ids.
  */
-export function patchLayoutSpec(
+export function cleanFormLayoutSpec(
   layoutSpec: FormLayoutNode,
-  fieldIds: Set<number>
+  fieldIds: Set<number>|Record<number, number>,
 ): FormLayoutNode | null {
-  if (layoutSpec.leaf && !fieldIds.has(layoutSpec.leaf)) { return null; }
+  if (layoutSpec.leaf) {
+    if (fieldIds instanceof Set) {
+      return fieldIds.has(layoutSpec.leaf) ? {...layoutSpec} : null;
+    }
+    return fieldIds[layoutSpec.leaf] ? {...layoutSpec, leaf: fieldIds[layoutSpec.leaf]} : null;
+  }
 
   return {
     ...layoutSpec,
     children: layoutSpec.children
-      ?.map(child => patchLayoutSpec(child, fieldIds))
+      ?.map(child => cleanFormLayoutSpec(child, fieldIds))
       .filter((child): child is FormLayoutNode => child !== null),
   };
 }
+
 
 /**
  * A renderer for a form layout.
@@ -240,6 +247,7 @@ abstract class BaseFieldRenderer extends Disposable {
     return css.field(
       this.label(),
       dom('div', this.input()),
+      this.fieldDomAttributes(),
     );
   }
 
@@ -247,11 +255,15 @@ abstract class BaseFieldRenderer extends Disposable {
     return this.field.colId;
   }
 
+  public id() {
+    return this.name().replace(/\s+/g, '-');
+  }
+
   public label() {
     return dom('label',
       css.label.cls(''),
       css.label.cls('-required', Boolean(this.field.options.formRequired)),
-      {for: this.name()},
+      {for: this.name(), id: `${this.id()}-label`},
       this.field.question,
     );
   }
@@ -259,6 +271,13 @@ abstract class BaseFieldRenderer extends Disposable {
   public abstract input(): DomContents;
 
   public abstract resetInput(): void;
+
+  /**
+   * A Field renderer can override this to add additional attributes to the field's DOM element.
+   */
+  public fieldDomAttributes(): IAttrObj {
+    return {};
+  }
 }
 
 class TextRenderer extends BaseFieldRenderer {
@@ -285,6 +304,7 @@ class TextRenderer extends BaseFieldRenderer {
       {
         type: this.inputType,
         name: this.name(),
+        id: this.id(),
         required: this.field.options.formRequired,
       },
       dom.prop('value', this._value),
@@ -296,6 +316,7 @@ class TextRenderer extends BaseFieldRenderer {
     return css.textarea(
       {
         name: this.name(),
+        id: this.id(),
         required: this.field.options.formRequired,
         rows: this._lineCount,
       },
@@ -330,6 +351,7 @@ class NumericRenderer extends BaseFieldRenderer {
       {
         type: this.inputType,
         name: this.name(),
+        id: this.id(),
         required: this.field.options.formRequired,
       },
       dom.prop('value', this._value),
@@ -345,6 +367,7 @@ class NumericRenderer extends BaseFieldRenderer {
         inputArgs: [
           {
             name: this.name(),
+            id: this.id(),
             required: this.field.options.formRequired,
           },
           preventSubmitOnEnter(),
@@ -403,6 +426,16 @@ class ChoiceRenderer extends BaseFieldRenderer  {
     })));
   }
 
+  public fieldDomAttributes() {
+    if (this._format === 'radio') {
+      return {
+        role: 'group',
+        'aria-labelledby': `${this.id()}-label`,
+      };
+    }
+    return {};
+  }
+
   public input() {
     if (this._format === 'select') {
       return this._renderSelectInput();
@@ -421,7 +454,7 @@ class ChoiceRenderer extends BaseFieldRenderer  {
   private _renderSelectInput() {
     return css.hybridSelect(
       this._selectElement = css.select(
-        {name: this.name(), required: this.field.options.formRequired},
+        {name: this.name(), id: this.id(), required: this.field.options.formRequired},
         dom.on('input', (_e, elem) => this.value.set(elem.value)),
         dom('option', {value: ''}, selectPlaceholder()),
         this._choices.map((choice) => dom('option',
@@ -594,6 +627,13 @@ class ChoiceListRenderer extends BaseFieldRenderer  {
     })));
   }
 
+  public fieldDomAttributes() {
+    return {
+      role: 'group',
+      'aria-labelledby': `${this.id()}-label`,
+    };
+  }
+
   public input() {
     const required = this.field.options.formRequired;
     return css.checkboxList(
@@ -655,6 +695,14 @@ class RefListRenderer extends BaseFieldRenderer {
       checked: Observable.create(this, null),
     })));
   }
+
+  public fieldDomAttributes() {
+    return {
+      role: 'group',
+      'aria-labelledby': `${this.id()}-label`,
+    };
+  }
+
   public input() {
     const required = this.field.options.formRequired;
     return css.checkboxList(
@@ -726,6 +774,17 @@ class RefRenderer extends BaseFieldRenderer {
     })));
   }
 
+
+  public fieldDomAttributes() {
+    if (this._format === 'radio') {
+      return {
+        role: 'group',
+        'aria-labelledby': `${this.id()}-label`,
+      };
+    }
+    return {};
+  }
+
   public input() {
     if (this._format === 'select') {
       return this._renderSelectInput();
@@ -746,6 +805,7 @@ class RefRenderer extends BaseFieldRenderer {
       this._selectElement = css.select(
         {
           name: this.name(),
+          id: this.id(),
           'data-grist-type': this.field.type,
           required: this.field.options.formRequired,
         },

@@ -15,17 +15,16 @@ describe('SqliteSettings', function() {
 
   for (const externalStorage of [true, false] as const) {
 
-    for (const mode of ['default', 'sync', 'wal'] as const) {
+    for (const mode of ['', 'sync', 'wal'] as const) {
 
-      describe(`mode ${mode}, externalStorage ${externalStorage}`, function() {
+      describe(`mode ${mode || 'default'}, externalStorage ${externalStorage}`, function() {
 
         before(async function() {
           this.timeout(60000);
           oldEnv = new EnvironmentSnapshot();
-          if (mode !== 'default') {
-            process.env.GRIST_SQLITE_MODE = mode;
-          }
-          if (externalStorage && !process.env.GRIST_DOCS_MINIO_ACCESS_KEY) {
+          process.env.GRIST_SQLITE_MODE = mode;
+          if (externalStorage && !process.env.GRIST_DOCS_MINIO_BUCKET &&
+              !process.env.GRIST_DOCS_S3_PREFIX) {
             this.skip();
           }
           home = new TestServer(this);
@@ -36,7 +35,7 @@ describe('SqliteSettings', function() {
         });
 
         after(async function() {
-          await home.stop();
+          await home?.stop();
           oldEnv.restore();
         });
 

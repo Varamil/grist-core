@@ -59,6 +59,7 @@ export class DocApiForwarder {
     app.use('/api/docs/:docId/create-fork', withDoc);
     app.use('/api/docs/:docId/apply', withDoc);
     app.use('/api/docs/:docId/attachments', withDoc);
+    app.use('/api/docs/:docId/attachments/archive', withDoc);
     app.use('/api/docs/:docId/attachments/download', withDoc);
     app.use('/api/docs/:docId/attachments/transferStatus', withDoc);
     app.use('/api/docs/:docId/attachments/transferAll', withDoc);
@@ -80,7 +81,9 @@ export class DocApiForwarder {
     app.use('/api/docs/:docId/timing/stop', withDoc);
     app.use('/api/docs/:docId/forms/:vsId', withDoc);
 
+    app.use('/api/docs/:docId/copy', withoutDoc);
     app.use('^/api/docs$', withoutDoc);
+    app.use('/api/workspaces/:wid/import', withoutDoc);
   }
 
   private async _forwardToDocWorker(

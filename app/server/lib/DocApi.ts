@@ -43,7 +43,13 @@ import {
   TableOperationsImpl,
   TableOperationsPlatform
 } from 'app/plugin/TableOperationsImpl';
-import {ActiveDoc, colIdToRef as colIdToReference, getRealTableId, tableIdToRef} from "app/server/lib/ActiveDoc";
+import {
+  ActiveDoc,
+  ArchiveUploadResult,
+  colIdToRef as colIdToReference,
+  getRealTableId,
+  tableIdToRef
+} from "app/server/lib/ActiveDoc";
 import {appSettings} from "app/server/lib/AppSettings";
 import {CreatableArchiveFormats} from 'app/server/lib/Archive';
 import {sendForCompletion} from 'app/server/lib/Assistance';
@@ -93,14 +99,16 @@ import {
   optStringParam,
   sendOkReply,
   sendReply,
-  stringParam
+  stringParam,
 } from 'app/server/lib/requestUtils';
 import {ServerColumnGetters} from 'app/server/lib/ServerColumnGetters';
 import {localeFromRequest} from "app/server/lib/ServerLocale";
 import {getDocSessionShare} from "app/server/lib/sessionUtils";
 import {isUrlAllowed, WebhookAction, WebHookSecret} from "app/server/lib/Triggers";
-import {fetchDoc, globalUploadSet, handleOptionalUpload, handleUpload,
-        makeAccessId} from "app/server/lib/uploads";
+import {
+  fetchDoc, globalUploadSet, handleOptionalUpload, handleUpload,
+  makeAccessId, parseMultipartFormRequest,
+} from "app/server/lib/uploads";
 import * as assert from 'assert';
 import contentDisposition from 'content-disposition';
 import {Application, NextFunction, Request, RequestHandler, Response} from "express";
@@ -108,6 +116,7 @@ import * as _ from "lodash";
 import LRUCache from 'lru-cache';
 import * as moment from 'moment';
 import fetch from 'node-fetch';
+import * as stream from 'node:stream';
 import * as path from 'path';
 import * as t from "ts-interface-checker";
 import {Checker} from "ts-interface-checker";
@@ -575,7 +584,7 @@ export class DocWorkerApi {
     );
 
     // Responds with an archive of all attachment contents, with suitable Content-Type and Content-Disposition.
-    this._app.get('/api/docs/:docId/attachments/download', canView, withDoc(async (activeDoc, req, res) => {
+    this._app.get('/api/docs/:docId/attachments/archive', canView, withDoc(async (activeDoc, req, res) => {
       const archiveFormatStr = optStringParam(req.query.format, 'format', {
         allowed: CreatableArchiveFormats.values,
         allowEmpty: true,
@@ -592,7 +601,50 @@ export class DocWorkerApi {
         // Avoid storing because this could be huge.
         .set('Cache-Control', 'no-store');
 
-      archive.dataStream.pipe(res);
+      try {
+        await archive.packInto(res, { endDestStream: false });
+      } catch(err) {
+        // Most behaviours here result in a poor user experience. The options are:
+        // - No data written to the stream: open a new tab with a 500 error.
+        // - Destroy the stream: open a new tab with a connection reset error.
+        // - Return some data without res.destroy(): download shows as successful, despite being corrupt.
+        // Sending headers then resetting the connection shows as 'Download failed', which is preferable.
+        // There's no way to guarantee headers have been flushed except by writing data, which is
+        // why we write some arbitrary data then destroy the stream.
+
+        // Need to cast { end: false } to any because @types/node for node 18 has a missing parameter.
+        await stream.promises.pipeline(stream.Readable.from("Internal server error"), res, { end: false } as any);
+        res.destroy(err);
+      }
+      res.end();
+    }));
+
+    this._app.post('/api/docs/:docId/attachments/archive', isOwner, withDoc(async (activeDoc, req, res) => {
+      let archivePromise: Promise<ArchiveUploadResult> | undefined;
+
+      await parseMultipartFormRequest(
+        req,
+        async (file) => {
+          if (archivePromise || !file.name.endsWith('.tar') || file.contentType !== "application/x-tar") { return; }
+          archivePromise = activeDoc.addMissingFilesFromArchive(docSessionFromRequest(req), file.stream);
+          await archivePromise;
+        }
+      );
+
+      if (!archivePromise) {
+        throw new ApiError("No .tar file found in request", 400);
+      }
+
+      // parseMultipartFormRequest ignores handler errors.
+      // Await this here to ensure errors are thrown.
+      try {
+        res.json(await archivePromise);
+      } catch(err) {
+        if (err instanceof Error && err.message === "Unexpected end of data") {
+          throw new Error("File is not a valid .tar");
+        }
+        throw err;
+      }
     }));
 
     // Returns cleaned metadata for a given attachment ID (i.e. a rowId in _grist_Attachments table).
@@ -1352,30 +1404,38 @@ export class DocWorkerApi {
     }));
 
     // Do an import targeted at a specific workspace. Although the URL fits ApiServer, this
-    // endpoint is handled only by DocWorker, so is handled here. (Note: this does not handle
-    // actual file uploads, so no worries here about large request bodies.)
+    // endpoint is handled only by DocWorker, so is handled here.
+    // This endpoint either uploads a new file to import, or accepts an existing uploadId.
     this._app.post('/api/workspaces/:wid/import', expressWrap(async (req, res) => {
       const mreq = req as RequestWithLogin;
       const userId = getUserId(req);
       const wsId = integerParam(req.params.wid, 'wid');
-      const uploadId = integerParam(req.body.uploadId, 'uploadId');
-      const result = await this._docManager.importDocToWorkspace(mreq, {
+
+      let params: { [key: string]: any } = {};
+      if (req.is('multipart/form-data')) {
+        const formResult = await handleOptionalUpload(req, res);
+        params = formResult.parameters ?? {};
+        if (formResult.upload) {
+          params.uploadId = formResult.upload.uploadId;
+        }
+      } else {
+        params = req.body;
+      }
+
+      const uploadId = integerParam(params.uploadId, 'uploadId');
+
+      const browserSettings = params.browserSettings ?? {
+        timezone: params.timezone,
+        locale: localeFromRequest(req),
+      };
+
+      const result = await this._importDocumentToWorkspace(mreq, {
         userId,
         uploadId,
         workspaceId: wsId,
-        browserSettings: req.body.browserSettings,
-        telemetryMetadata: {
-          limited: {
-            isImport: true,
-            sourceDocIdDigest: undefined,
-          },
-          full: {
-            userId: mreq.userId,
-            altSessionId: mreq.altSessionId,
-          },
-        },
+        documentName: optStringParam(params.documentName, 'documentName'),
+        browserSettings,
       });
-      this._logImportDocumentEvents(mreq, result);
       res.json(result);
     }));
 
@@ -1502,22 +1562,12 @@ export class DocWorkerApi {
           asTemplate: optBooleanParam(parameters.asTemplate, 'asTemplate'),
         });
       } else if (uploadId !== undefined) {
-        const result = await this._docManager.importDocToWorkspace(mreq, {
+        const result = await this._importDocumentToWorkspace(mreq, {
           userId,
           uploadId,
           documentName: optStringParam(parameters.documentName, 'documentName'),
           workspaceId,
-          browserSettings,
-          telemetryMetadata: {
-            limited: {
-              isImport: true,
-              sourceDocIdDigest: undefined,
-            },
-            full: {
-              userId: mreq.userId,
-              altSessionId: mreq.altSessionId,
-            },
-          },
+          browserSettings
         });
         docId = result.id;
         this._logImportDocumentEvents(mreq, result);
@@ -1532,6 +1582,22 @@ export class DocWorkerApi {
           browserSettings,
         });
       }
+
+      return res.status(200).json(docId);
+    }));
+
+    this._app.post('/api/docs/:docId/copy', canView, expressWrap(async (req, res) => {
+      const userId = getUserId(req);
+
+      const parameters: {[key: string]: any} = req.body;
+
+      const docId = await this._copyDocToWorkspace(req, {
+        userId,
+        sourceDocumentId: stringParam(req.params.docId, 'docId'),
+        workspaceId: integerParam(parameters.workspaceId, 'workspaceId'),
+        documentName: stringParam(parameters.documentName, 'documentName'),
+        asTemplate: optBooleanParam(parameters.asTemplate, 'asTemplate'),
+      });
 
       return res.status(200).json(docId);
     }));
@@ -1798,6 +1864,34 @@ export class DocWorkerApi {
     })
       .catch(e => log.error('DocApi failed to log duplicate document events', e));
     return id;
+  }
+
+  private async _importDocumentToWorkspace(mreq: RequestWithLogin, options: {
+    userId: number,
+    uploadId: number,
+    documentName?: string,
+    workspaceId?: number,
+    browserSettings?: BrowserSettings,
+  }) {
+    const result = await this._docManager.importDocToWorkspace(mreq, {
+      userId: options.userId,
+      uploadId: options.uploadId,
+      documentName: options.documentName,
+      workspaceId: options.workspaceId,
+      browserSettings: options.browserSettings,
+      telemetryMetadata: {
+        limited: {
+          isImport: true,
+          sourceDocIdDigest: undefined,
+        },
+        full: {
+          userId: mreq.userId,
+          altSessionId: mreq.altSessionId,
+        },
+      },
+    });
+    this._logImportDocumentEvents(mreq, result);
+    return result;
   }
 
   private async _createNewSavedDoc(req: Request, options: {

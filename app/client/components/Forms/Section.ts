@@ -36,6 +36,7 @@ export class SectionModel extends BoxModel {
       content: style.cssSection(
         // Wrap them in a div that mutes hover events.
         cssSectionItems(
+          testId('content'),
           dom.forEach(children, (child) => child.render()),
         ),
         // Plus icon
@@ -125,7 +126,7 @@ export function Section(...children: FormLayoutNode[]): FormLayoutNode {
     id: uuidv4(),
     type: 'Section',
     children: [
-      Paragraph(t('### **Header**')),
+      Paragraph(t('## **Header**')),
       Paragraph(t('Description')),
       ...children,
     ],
